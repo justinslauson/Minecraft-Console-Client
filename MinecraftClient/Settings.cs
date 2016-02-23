@@ -39,11 +39,12 @@ namespace MinecraftClient
         public static string ProxyPassword = "";
 
         //Other Settings
-        public static string TranslationsFile_FromMCDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + @"\.minecraft\assets\objects\9e\9e2fdc43fc1c7024ff5922b998fadb2971a64ee0"; //MC 1.7.4 en_GB.lang
-        public static string TranslationsFile_Website_Index = "https://s3.amazonaws.com/Minecraft.Download/indexes/1.7.4.json";
+        public static string TranslationsFile_FromMCDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + @"\.minecraft\assets\objects\03\03f31164d234f10a3230611656332f1756e570a9"; //MC 1.8 en_GB.lang
+        public static string TranslationsFile_Website_Index = "https://s3.amazonaws.com/Minecraft.Download/indexes/1.8.json";
         public static string TranslationsFile_Website_Download = "http://resources.download.minecraft.net";
         public static TimeSpan splitMessageDelay = TimeSpan.FromSeconds(2);
         public static List<string> Bots_Owners = new List<string>();
+        public static TimeSpan botMessageDelay = TimeSpan.FromSeconds(2);
         public static string Language = "en_GB";
         public static bool chatTimeStamps = false;
         public static bool interactiveMode = true;
@@ -55,6 +56,7 @@ namespace MinecraftClient
         public static bool DisplaySystemMessages = true;
         public static bool DisplayXPBarMessages = true;
         public static bool TerrainAndMovements = false;
+        public static string PrivateMsgsCmdName = "tell";
 
         //AntiAFK Settings
         public static bool AntiAFK_Enabled = false;
@@ -180,6 +182,8 @@ namespace MinecraftClient
                                                 case "showsystemmessages": DisplaySystemMessages = str2bool(argValue); break;
                                                 case "showxpbarmessages": DisplayXPBarMessages = str2bool(argValue); break;
                                                 case "terrainandmovements": TerrainAndMovements = str2bool(argValue); break;
+                                                case "privatemsgscmdname": PrivateMsgsCmdName = argValue.ToLower().Trim(); break;
+                                                case "botmessagedelay": botMessageDelay = TimeSpan.FromSeconds(str2int(argValue)); break;
 
                                                 case "botowners":
                                                     Bots_Owners.Clear();
@@ -404,9 +408,11 @@ namespace MinecraftClient
                 + "consoletitle=%username%@%serverip% - Minecraft Console Client\r\n"
                 + "internalcmdchar=slash #use 'none', 'slash' or 'backslash'\r\n"
                 + "splitmessagedelay=2 #seconds between each part of a long message\r\n"
+                + "botmessagedelay=2 #seconds to delay between message a bot makes to avoid accidental spam\n\n"
                 + "mcversion=auto #use 'auto' or '1.X.X' values\r\n"
                 + "brandinfo=mcc #use 'mcc','vanilla', or 'none'\r\n"
                 + "chatbotlogfile= #leave empty for no logfile\r\n"
+                + "privatemsgscmdname=tell #used by RemoteControl bot\r\n"
                 + "showsystemmessages=true #system messages for server ops\r\n"
                 + "showxpbarmessages=true #messages displayed above xp bar\r\n"
                 + "terrainandmovements=false #uses more ram, cpu, bandwidth\r\n"

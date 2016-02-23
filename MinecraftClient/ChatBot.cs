@@ -41,6 +41,33 @@ namespace MinecraftClient
         private McTcpClient Handler { get { return master != null ? master.Handler : _handler; } }
         private McTcpClient _handler = null;
         private ChatBot master = null;
+        private List<string> registeredPluginChannels = new List<String>();
+        private Queue<string> chatQueue = new Queue<string>();
+        private DateTime? lastMessageSentTime = DateTime.MinValue;
+        private bool CanSendTextNow
+        {
+            get
+            {
+                return DateTime.Now > lastMessageSentTime.Value + Settings.botMessageDelay;
+            }
+        }
+
+        /// <summary>
+        /// Processes the current chat message queue, displaying a message after enough time passes.
+        /// </summary>
+        internal void ProcessQueuedText()
+        {
+            if (chatQueue.Count > 0)
+            {
+                if (CanSendTextNow)
+                {
+                    string text = chatQueue.Dequeue();
+                    LogToConsole("Sending '" + text + "'");
+                    lastMessageSentTime = DateTime.Now;
+                    Handler.SendText(text);
+                }
+            }
+        }
 
         /* ================================================== */
         /*   Main methods to override for creating your bot   */
@@ -48,9 +75,21 @@ namespace MinecraftClient
 
         /// <summary>
         /// Anything you want to initialize your bot, will be called on load by MinecraftCom
+        ///
+        /// NOTE: Chat messages cannot be sent at this point in the login process.  If you want to send
+        /// a message when the bot is loaded, use AfterGameJoined.
         /// </summary>
 
         public virtual void Initialize() { }
+
+        /// <summary>
+        /// Called after the server has been joined successfully and chat messages are able to be sent.
+        ///
+        /// NOTE: This is not always right after joining the server - if the bot was loaded after logging
+        /// in this is still called.
+        /// </summary>
+
+        public virtual void AfterGameJoined() { }
 
         /// <summary>
         /// Will be called every ~100ms (10fps) if loaded in MinecraftCom
@@ -74,6 +113,17 @@ namespace MinecraftClient
 
         public virtual bool OnDisconnect(DisconnectReason reason, string message) { return false; }
 
+        /// <summary>
+        /// Called when a plugin channel message is received.
+        /// The given channel must have previously been registered with RegisterPluginChannel.
+        /// This can be used to communicate with server mods or plugins.  See wiki.vg for more
+        /// information about plugin channels: http://wiki.vg/Plugin_channel
+        /// </summary>
+        /// <param name="channel">The name of the channel</param>
+        /// <param name="data">The payload for the message</param>
+
+        public virtual void OnPluginMessage(string channel, byte[] data) { }
+
         /* =================================================================== */
         /*  ToolBox - Methods below might be useful while creating your bot.   */
         /*  You should not need to interact with other classes of the program. */
@@ -84,11 +134,24 @@ namespace MinecraftClient
         /// Send text to the server. Can be anything such as chat messages or commands
         /// </summary>
         /// <param name="text">Text to send to the server</param>
+        /// <param name="sendImmediately">Whether the message should be sent immediately rather than being queued to avoid chat spam</param>
         /// <returns>True if the text was sent with no error</returns>
 
-        protected bool SendText(string text)
+        protected bool SendText(string text, bool sendImmediately = false)
         {
+            if (Settings.botMessageDelay.TotalSeconds > 0 && !sendImmediately)
+            {
+                if (!CanSendTextNow)
+                {
+                    chatQueue.Enqueue(text);
+                    // TODO: We don't know whether there was an error at this point, so we assume there isn't.
+                    // Might not be the best idea.
+                    return true;
+                }
+            }
+
             LogToConsole("Sending '" + text + "'");
+            lastMessageSentTime = DateTime.Now;
             return Handler.SendText(text);
         }
 
@@ -492,7 +555,7 @@ namespace MinecraftClient
 
         protected void SendPrivateMessage(string player, string message)
         {
-            SendText("/tell " + player + ' ' + message);
+            SendText(String.Format("/{0} {1} {2}", Settings.PrivateMsgsCmdName, player, message));
         }
 
         /// <summary>
@@ -556,6 +619,49 @@ namespace MinecraftClient
                 LogToConsole("File not found: " + Settings.Alerts_MatchesFile);
                 return new string[0];
             }
+        }
+
+        /// <summary>
+        /// Registers the given plugin channel for use by this chatbot.
+        /// </summary>
+        /// <param name="channel">The name of the channel to register</param>
+
+        protected void RegisterPluginChannel(string channel)
+        {
+            this.registeredPluginChannels.Add(channel);
+            Handler.RegisterPluginChannel(channel, this);
+        }
+
+        /// <summary>
+        /// Unregisters the given plugin channel, meaning this chatbot can no longer use it.
+        /// </summary>
+        /// <param name="channel">The name of the channel to unregister</param>
+
+        protected void UnregisterPluginChannel(string channel)
+        {
+            this.registeredPluginChannels.RemoveAll(chan => chan == channel);
+            Handler.UnregisterPluginChannel(channel, this);
+        }
+
+        /// <summary>
+        /// Sends the given plugin channel message to the server, if the channel has been registered.
+        /// See http://wiki.vg/Plugin_channel for more information about plugin channels.
+        /// </summary>
+        /// <param name="channel">The channel to send the message on.</param>
+        /// <param name="data">The data to send.</param>
+        /// <param name="sendEvenIfNotRegistered">Should the message be sent even if it hasn't been registered by the server or this bot?  (Some Minecraft channels aren't registered)</param>
+        /// <returns>Whether the message was successfully sent.  False if there was a network error or if the channel wasn't registered.</returns>
+
+        protected bool SendPluginChannelMessage(string channel, byte[] data, bool sendEvenIfNotRegistered = false)
+        {
+            if (!sendEvenIfNotRegistered)
+            {
+                if (!this.registeredPluginChannels.Contains(channel))
+                {
+                    return false;
+                }
+            }
+            return Handler.SendPluginChannelMessage(channel, data, sendEvenIfNotRegistered);
         }
     }
 }
